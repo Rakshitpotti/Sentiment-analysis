@@ -68,7 +68,7 @@ const Header = () => {
   return (
     <header className="header-bar">
       <div className="header-logo">
-        <img src="/Group.png" alt="Logo" className="logo-image" />
+        <img src="/Group.jpg" alt="Logo" className="logo-image" />
       </div>
 
       <div className="header-profile" style={{ display: "flex", alignItems: "center" }}>
