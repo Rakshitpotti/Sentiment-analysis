@@ -9,7 +9,7 @@ from openai import AzureOpenAI
 from dotenv import load_dotenv
 import io
 from fastapi.responses import FileResponse
-from typing import List, Tuple
+from typing import List, Tuple, Dict
 
 load_dotenv()
 
@@ -26,7 +26,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 agent1 = AzureOpenAI(
     api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
     azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
@@ -38,11 +37,9 @@ agent2 = AzureOpenAI(
     api_version=os.environ.get("AZURE_OPENAI_VERSION"),
 )
 
-# ✅ UPDATED: async and safe file reading
-async def process_excel(file: UploadFile) -> List[str]:
+def process_excel(file: UploadFile) -> List[str]:
     try:
-        content = await file.read()
-        df = pd.read_excel(io.BytesIO(content))
+        df = pd.read_excel(file.file)
         return df.iloc[:, 0].dropna().tolist()
     except Exception as e:
         logger.error(f"Error processing Excel file: {str(e)}")
@@ -60,10 +57,18 @@ def parse_categories(categories: str) -> List[Tuple[str, str]]:
         category_list.append((category, sentiment))
     return category_list
 
+@app.get("/download/{filename}")
+async def download_file(filename: str):
+    file_path = os.path.join(OUTPUT_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path, media_type='text/csv', filename=filename)
+    else:
+        raise HTTPException(status_code=404, detail="File not found")
+
 @app.post("/analyze")
 async def analyze_sentiment(file: UploadFile = File(...), categories: str = Form(...)):
     try:
-        comments = await process_excel(file)
+        comments = process_excel(file)
         category_list = parse_categories(categories)
         if not category_list:
             raise HTTPException(status_code=400, detail="At least one category must be provided.")
@@ -103,7 +108,7 @@ async def analyze_sentiment(file: UploadFile = File(...), categories: str = Form
         for row in reader:
             if len(row) == 3:
                 category_sentiment, sentiment, comment = row
-                category = category_sentiment.split(":")[0] if ":" in category_sentiment else category_sentiment
+                category = category_sentiment.split("-")[0].strip()
                 if category and sentiment and comment:
                     cleaned_data.append([category.strip(), sentiment.strip(), comment.strip()])
 
